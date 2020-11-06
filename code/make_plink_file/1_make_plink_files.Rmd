@@ -1,0 +1,164 @@
+---
+title: "Untitled"
+author: "Takeo Naito, MD PhD"
+date: "10/29/2020"
+output: html_document
+---
+
+
+## make pgen for ichip7
+```{bash}
+plink2 \
+--vcf /mnt/YanX/imputation_results/ichip7_eur/extracted_vcfs/filtered/ichip7_eur_all_chr_filtered_dose.vcf.gz \
+--make-pgen \
+--out /mnt/isilon_data/For_Takeo2/WES2/thiopurine/impute_ichip_plink/imputed_ichip
+```
+
+
+## make bfile for ichip7
+
+```{bash}
+plink2 \
+--pfile /mnt/isilon_data/For_Takeo2/WES2/thiopurine/impute_ichip_plink/imputed_ichip \
+--make-bed \
+--out /mnt/isilon_data/For_Takeo2/WES2/thiopurine/impute_ichip_plink/imputed_ichip_b
+```
+
+
+## confirm how many variants will be available
+```{r}
+bim = fread("/mnt/isilon_data/For_Takeo2/WES2/thiopurine/impute_ichip_plink/imputed_ichip_b.bim")
+
+
+bim1 = fread("/mnt/isilon_data/For_Takeo2/From_nick/Pfile_merged/bfile_with_147_25_final37_filtered.bim")
+
+
+bim <- bim %>% 
+  mutate(ID = paste0(V1,":",V4))
+
+
+
+bim1 <- bim1 %>% 
+  mutate(ID = paste0(V1,":",V4))
+
+length(intersect(bim1$ID,bim$ID))
+```
+
+
+
+
+## make bfile for ichip1t6 per chr 
+```{bash}
+for i in `seq 1 22`;
+
+do
+        pname="/mnt/YanX/imputation_results/ichip1t6_eur/extracted_vcfs/filtered/plink_files/chr"${i}".filtered.dose"
+        outname="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/chr"${i}"_bfile"
+        plink2 \
+        --pfile ${pname} \
+        --set-all-var-ids @:#:\$r:\$a \
+        --new-id-max-allele-len 70 truncate \
+        --make-bed \
+        --out ${outname}
+done
+```
+
+
+
+## make bfile for ichip7 per chr
+```{bash}
+for i in `seq 1 22`;
+
+do
+        outname="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip7/chr"${i}"_bfile"
+        plink2 \
+        --bfile /mnt/isilon_data/For_Takeo2/WES2/thiopurine/impute_ichip_plink/imputed_ichip_b \
+        --chr ${i} \
+        --set-all-var-ids @:#:\$r:\$a \
+        --new-id-max-allele-len 70 truncate \
+        --make-bed \
+        --out ${outname}
+done
+```
+
+## merge ichip1t6 and ichip7 per chr
+
+```{bash}
+for i in `seq 1 22`;
+
+do
+        ichip1t6="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/chr"${i}"_bfile"
+        ichip7="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip7/chr"${i}"_bfile"
+        outname="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr"${i}"_bfile"
+        plink1.9 \
+        --bfile ${ichip1t6} \
+        --bmerge ${ichip7} \
+        --make-bed \
+        --keep-allele-order \
+        --out ${outname}
+done
+```
+
+
+## merge all chr file
+```{bash}
+plink1.9 \
+--bfile /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr1_bfile \
+--bmerge /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr2_bfile \
+--make-bed \
+--keep-allele-order \
+--out /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/merged/temp_file1
+```
+
+
+
+```{bash}
+for i in `seq 1 20`;
+
+do
+        j=$((${i}+2))
+        m=$((${i}+1))
+
+        input_file1="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/merged/temp_file"${i}
+        input_file2="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr"${j}"_bfile"
+        outname="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/merged/temp_file"${m}
+        plink1.9 \
+        --bfile ${input_file1} \
+        --bmerge ${input_file2} \
+        --make-bed \
+        --keep-allele-order \
+        --out ${outname}
+
+        rm ${input_file1}*
+done
+```
+
+
+
+```{r}
+bim1 = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/chr1_bfile.bim")
+
+bim2=  fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip7/chr1_bfile.bim")
+
+bim2 %>% 
+  filter(ID == "1:10003592")
+
+bim1 <- bim1 %>% 
+  mutate(ID = paste0(V1,":",V4))
+bim2 <- bim2 %>% 
+  mutate(ID = paste0(V1,":",V4))
+
+seta = intersect(bim1$V2,bim2$V2)
+
+setb= intersect(bim1$ID,bim2$ID)
+
+
+bim1 %>% 
+  filter(!V2 %in% seta & ID %in% setb) %>% 
+  View()
+
+bim2 %>% 
+  filter(ID == "1:7430080")
+
+```
+

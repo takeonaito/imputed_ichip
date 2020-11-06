@@ -1,0 +1,198 @@
+---
+title: "Untitled"
+author: "Takeo Naito, MD PhD"
+date: "11/5/2020"
+output: html_document
+---
+
+
+
+```{r}
+library(tidyverse)
+library(readr)
+library(data.table)
+library(readxl)
+library(writexl)
+```
+
+
+```{r}
+
+
+
+pheno = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/pancreatitis_pheno_imputed_ichip")
+
+nick <- fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/bfile_with_147_25_final37_filtered.fam")  %>% 
+  rename(FID = V1,
+         IID = V2) %>% 
+  mutate(pancreatitis = 2) %>% 
+  select(FID,IID,pancreatitis)
+
+new_pheno = rbind(pheno,nick)
+
+new_pheno %>% 
+  write_tsv("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/pancreatitis_pheno_imputed_ichip2")
+
+```
+
+
+```{r}
+cov = fread("/mnt/isilon_data/For_Takeo2/From_nick/Ichip/PCs/maf_001.eigenvec")
+cov <- cov %>% 
+  rename(IID2 = "#FID")
+
+cov = cov %>% 
+  mutate(FID = "0") %>% 
+  mutate(FID = ifelse(!IID %in% c("1","11"),IID2,FID)) %>% 
+  mutate(new_IID = ifelse(FID == "0",paste0(IID2,"_",IID),IID)) %>% 
+  select(FID,new_IID,starts_with("PC")) %>% 
+  rename(IID = new_IID)
+
+
+
+cov %>% 
+  write_tsv("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/PCs_as_cov")
+
+
+```
+
+
+
+```{bash}
+plink2 \
+--bfile /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/chr16_bfile \
+--covar /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/PCs_as_cov \
+--logistic hide-covar \
+--covar-name PC1,PC2,PC3,PC4 \
+--pheno /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/pancreatitis_pheno_imputed_ichip2 \
+--pheno-name pancreatitis \
+--remove /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/related_imputed_ichip \
+--out /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/results/chr16_res
+```
+
+
+```{r}
+
+keepsub= fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/pancreatitis_pheno_imputed_ichip2")
+
+keepsub %>% 
+  select(FID,IID) %>% 
+  write_tsv("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/keep_tmp")
+
+```
+
+
+
+```{bash}
+
+
+plink2 \
+--bfile /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/chr16_bfile \
+--freq counts \
+--keep /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/keep_tmp \
+--out /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/MAF/chr16
+
+rm /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/keep_tmp
+
+```
+
+
+
+```{r}
+res <- fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/results/chr16_res.pancreatitis.glm.logistic.hybrid")
+
+
+maf = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/MAF/chr16.acount")
+
+maf %>%
+  filter(ID == "16:3293310:A:G")
+  
+
+
+bim = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/chr16_bfile.bim")
+bim %>% filter(V4 == 3293310)
+res %>% 
+  filter(POS == 3293310) %>% 
+  View()
+res %>% 
+  arrange(P) %>% 
+  head(20) %>% 
+  View()
+
+
+info = fread("/mnt/YanX/imputation_results/ichip1t6_eur/info_files/chr16.info.gz")
+
+info %>% 
+  filter(SNP == "16:3293310")
+
+
+
+info %>% 
+  ggplot(aes(Rsq)) + geom_histogram()
+
+
+
+```
+
+```{bash}
+plink2 \
+--bfile /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/chr16_bfile \
+--extract /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/MEFV_snp \
+--export A \
+--out /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/MEFV
+```
+
+```{r}
+imputed = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/MEFV.raw")
+
+pheno = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/pancreatitis_pheno_imputed_ichip2")
+
+
+
+imputed <- imputed %>% 
+  inner_join(pheno,by = c("FID","IID"))
+
+imputed1 <- imputed %>% 
+  separate(IID,into = c("IID2","no_need"),sep = "_")
+colnames(imputed1) <- make.names(colnames(imputed1))
+
+imputed2 <- imputed1 %>% 
+  rename(ichip = X16.3293310.A.G_A) %>% 
+  select(IID2,ichip)
+
+
+
+gsa_sub = fread("/mnt/isilon_data/For_Takeo2/GSA2/thiopurine/pancreatitis_pheno_file")
+
+key_file_gsa =  read_tsv("/mnt/share6/SHARED_DATASETS/NIDDK_GSA_TOPMED_Imputed_2020/FID_IID_GeneticID_VCFID_key.txt")
+
+gsa_sub1 <- gsa_sub %>% 
+  left_join(key_file_gsa,by = c("IID" = "VCFID")) %>% 
+  mutate(FID = 0)
+
+
+
+gsa_geno = fread("/mnt/isilon_data/For_Takeo2/GSA2/MEFV_snp_geno.raw")
+
+gsa_geno1 = gsa_geno %>% 
+  inner_join(gsa_sub1,by ="IID") %>% 
+  select(IID,GeneticID,"chr16:3243310:A:G_A",pancreatitis)
+colnames(gsa_geno1) <- make.names(colnames(gsa_geno1))
+
+gsa_geno2 <- gsa_geno1 %>% 
+  mutate(imputed_gsa = round(chr16.3243310.A.G_A)) %>% 
+  mutate(IID2 = str_replace_all(GeneticID,"-","0"))
+
+gsa_geno3 <- gsa_geno2 %>% 
+  rename(GSA = imputed_gsa) %>% 
+  select(IID2,GSA)
+
+imputed3 <- imputed2 %>% 
+  inner_join(gsa_geno3,by = "IID2")
+
+
+table(imputed3$ichip,imputed3$GSA)
+
+```
+
+

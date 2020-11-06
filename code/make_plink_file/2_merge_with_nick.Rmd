@@ -1,0 +1,100 @@
+---
+title: "Untitled"
+author: "Takeo Naito, MD PhD"
+date: "11/5/2020"
+output: html_document
+---
+
+## update ID in nick file
+
+```{bash}
+plink2 \
+--make-bed \
+--bfile /mnt/isilon_data/For_Takeo2/From_nick/Pfile_merged/bfile_with_147_25_final37_filtered \
+--set-all-var-ids @:#:\$r:\$a \
+--new-id-max-allele-len 70 truncate \
+--out /mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/bfile_with_147_25_final37_filtered
+
+
+```
+
+
+
+## merge imputed ichip with nicks file
+```{r}
+nick = fread("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/bfile_with_147_25_final37_filtered.bim")
+
+
+num = c(1:12)
+num =c(num,c(14:22))
+
+
+for (i in num) {
+  ichip_name = paste0("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr",
+                      i,
+                      "_bfile.bim")
+  outname = paste0("/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/extractlist/chr",
+                   i)
+  temp_list = fread(ichip_name)
+  
+  temp_list = nick %>% 
+    inner_join(temp_list,by = "V2")
+  
+  temp_list %>% 
+    select(V2) %>% 
+    write_tsv(outname,col_names = F)
+}
+
+```
+
+
+
+## merge nick file with imputed ichip
+
+```{bash}
+ myarray=( 1 2 3 4 5 6 7 8 9 10 11 12 14 15 16 17 18 19 20 21 22 )
+  
+  
+  for i in "${myarray[@]}"
+  do
+
+        extract_list="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/extractlist/chr"${i}
+        input_file1="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/bfile_with_147_25_final37_filtered"
+        input_file2="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/ichip1t7/chr"${i}"_bfile"
+        outname1="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/temp_file1"${i}
+        outname2="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/temp_file2"${i}
+        outnamef="/mnt/isilon_data/For_Takeo2/From_nick/imputed_ichip/plinkfiles/merged_pfile/chr"${i}"_bfile"
+        plink2 \
+        --bfile ${input_file1} \
+        --extract ${extract_list} \
+        --make-bed \
+        --out ${outname1}
+
+        plink2 \
+        --bfile ${input_file2} \
+        --extract ${extract_list} \
+        --make-bed \
+        --out ${outname2}
+
+
+        plink1.9 \
+        --bfile ${outname2} \
+        --bmerge ${outname1} \
+        --make-bed \
+        --keep-allele-order \
+        --out ${outnamef}
+
+
+
+
+
+
+        rm ${outname1}*
+        rm ${outname2}*
+  
+  
+  
+  done
+
+```
+
